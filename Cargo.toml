@@ -2,13 +2,10 @@
 name = "tcpeek"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name"]
-description = "A utility to capture the first N packets/bytes from TCP sessions"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["sharvul"]
+description = "A utility to capture the first N packets from TCP sessions"
 
 [dependencies]
-pcap = "1.1.0"
+pcap = "2.2.0"
 clap = { version = "4.5.36", features = ["derive"] }
-dashmap = "5.5.3"
-ctrlc = "3.4"
+ctrlc = "3.4.6"
