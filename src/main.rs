@@ -24,17 +24,21 @@ struct Args {
     /// Output file to save captured packets 
     #[arg(short, long)]
     output: String,
+
+    /// Global limit on total packets to capture
+    #[arg(short, long, default_value_t = 50000)]
+    count: usize,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 struct TCPSessionMetadata {
-    src: SocketAddrV4,
-    dst: SocketAddrV4,
+    client: SocketAddrV4,
+    server: SocketAddrV4,
 }
 
 impl std::fmt::Display for TCPSessionMetadata {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} -> {}", self.src, self.dst)
+        write!(f, "{} -> {}", self.client, self.server)
     }
 }
 
@@ -74,13 +78,26 @@ fn parse_packet_data(data: &[u8]) -> Option<(TCPSessionMetadata, bool)> {
                 // Check for SYN flag (bit 1 in the flags byte)
                 let syn_flag = (data[tcp_header_start + 13] & 0x02) != 0;
                 
-                return Some((
-                    TCPSessionMetadata { 
-                        src: SocketAddrV4::new(src_ip, src_port), 
-                        dst: SocketAddrV4::new(dst_ip, dst_port), 
-                    },
-                    syn_flag
-                ));
+                if src_port > dst_port {
+                    // We assume the dst_port is the server port
+                    return Some((
+                        TCPSessionMetadata { 
+                            client: SocketAddrV4::new(src_ip, src_port), 
+                            server: SocketAddrV4::new(dst_ip, dst_port), 
+                        },
+                        syn_flag
+                    ));
+                }
+                else {
+                    // We assume the src_port is the server port
+                    return Some((
+                        TCPSessionMetadata { 
+                            client: SocketAddrV4::new(dst_ip, dst_port), 
+                            server: SocketAddrV4::new(src_ip, src_port), 
+                        },
+                        syn_flag
+                    ));
+                }
             }
         }
     }
@@ -115,6 +132,9 @@ fn main() {
     // Track sessions and their packet counts
     let mut session_packets_counter: HashMap<TCPSessionMetadata, usize> = HashMap::with_capacity(1000);
     
+    // Track total packets written
+    let mut total_packets_written = 0;
+    
     let is_running = Arc::new(AtomicBool::new(true));
     let is_running_clone = is_running.clone();
 
@@ -127,21 +147,27 @@ fn main() {
             Ok(packet) => {
                 if let Some((tcp_session_metadata, syn_flag)) = parse_packet_data(packet.data) {
                     // If this is a SYN packet, add session to the session counter
-                    if syn_flag {
+                    if syn_flag && !session_packets_counter.contains_key(&tcp_session_metadata) {
                         session_packets_counter.insert(tcp_session_metadata.clone(), 1);
                         println!("[+++] {}", tcp_session_metadata);
                     }
                     
-                    if let Some(count) = session_packets_counter.get_mut(&tcp_session_metadata) {
-                        if *count > args.number {
+                    if let Some(session_count) = session_packets_counter.get_mut(&tcp_session_metadata) {
+                        if *session_count > args.number {
                             continue;  // Skip if we've already captured enough packets
                         }    
-                        else if *count == args.number {
+                        else if *session_count == args.number {
                             println!("[---] {}", tcp_session_metadata);
                         }
                         
                         writer.write(&packet);
-                        *count += 1;
+                        *session_count += 1;
+                        total_packets_written += 1;
+
+                        if total_packets_written >= args.count {
+                            println!("Reached global packet limit of {}", args.count);
+                            break;
+                        }
                     }
                 }
             }
