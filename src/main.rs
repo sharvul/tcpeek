@@ -117,8 +117,6 @@ fn main() {
         .snaplen(65535)  // Capture full packets
         .timeout(500)  // 500ms timeout
         .open()
-        .unwrap()
-        .setnonblock()
         .unwrap();
     
     capture.filter(&args.filter, true).unwrap();
