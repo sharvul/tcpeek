@@ -112,10 +112,10 @@ fn main() {
 
     let mut capture = Capture::from_device(device)
         .unwrap()
-        .immediate_mode(true)
+        .immediate_mode(false)
         .buffer_size(16 * 1024 * 1024)  // 16MB buffer
         .snaplen(65535)  // Capture full packets
-        .timeout(100)  // 100ms timeout
+        .timeout(500)  // 500ms timeout
         .open()
         .unwrap()
         .setnonblock()
